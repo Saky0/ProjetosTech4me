@@ -38,7 +38,7 @@ public class AppPilotos {
             System.out.println("3 - Localizar piloto pelo CPF");
             System.out.println("4 - Aumentar espaço de armazenamento");
             System.out.println("0 - Sair");
-            System.out.print("Opção: ");
+            System.out.print("Opcao: ");
 
             try {
                 opcao = in.nextInt();
@@ -126,6 +126,7 @@ public class AppPilotos {
                 /**/ 
                 if(qtdCadastrados == 0) {
                     System.out.println("Não Existe nenhum piloto cadastrado no momento!!");
+                    voltarMenu(in);
                     continue;
                 }
 
@@ -266,6 +267,7 @@ public class AppPilotos {
 
 
     private static void voltarMenu(Scanner in) throws InterruptedException, IOException {
+        
         System.out.println("\nPressione ENTER para voltar ao menu.");
         in.nextLine();
 
@@ -275,7 +277,8 @@ public class AppPilotos {
         else
             System.out.print("\033[H\033[2J");
         
-        System.out.flush();
+        System.out.flush();  
+        
     }
 
     private static Piloto buscarPilotoCPF(String cpfSolicitado, int qtdCadastrados, Piloto... pilotos){
