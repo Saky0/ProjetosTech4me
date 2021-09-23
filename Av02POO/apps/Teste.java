@@ -72,6 +72,16 @@ public class Teste {
             Usa-se a Classe DateTimeFormatter 
             Esse formato vc pode criá-lo no inicio do programa, pois deve usar nele inteiro
         */
+        Scanner in2 = new Scanner(System.in);
+        String dataDigitadaPeloUsuario2 = in2.nextLine();
+        String dataDigitadaPeloUsuario3 = in2.nextLine();
+
+        if( !dataDigitadaPeloUsuario2.matches("[0-9A-Za-z\\.]*")) {
+            System.out.println("DIGITA DIREITO");
+        }
+
+
+
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
         /*
@@ -99,5 +109,6 @@ public class Teste {
         // O método parse() recebe uma String e converte para o padrão especificado a seguir
         LocalDate dataNova2 = LocalDate.parse(dataAtual, formatter /* Esse é o padrão criado */);
 
+       
     }
 }

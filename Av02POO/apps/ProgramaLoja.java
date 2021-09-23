@@ -3,13 +3,21 @@ package apps;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import static java.time.format.DateTimeFormatter.ofPattern;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.DoubleSummaryStatistics;
 import java.util.InputMismatchException;
+import java.util.IntSummaryStatistics;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
-import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.time.LocalDate.now;
+
 
 import classes.*;
 import exceptions.*;
@@ -24,18 +32,29 @@ public class ProgramaLoja {
     final static String formatoDoSyouFormatTitulo = "%10s %40s %17s %17s";
     final static String formatoDoSysouFormatProdutos = "%10d %40s %17.2f %17d";
     final static String formatoRodapeProdutos = "%25s %25s %25s";
-    final static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    final static DateTimeFormatter formatter = ofPattern("dd/MM/yyyy");
     final static String padraoData = "\\d{2}/\\d{2}/\\d{4}";
     final static String formatoTituloRelatorioVenda = "%15s %18s %40s %12s %21s";
     final static String formatoCorpoRelatorioVenda = "%15s %18.2f %40s %12d %21.2f";
     //#endregion
 
-    public static void main (String[] args) throws InterruptedException, IOException{
+    public static void main (String[] args) throws InterruptedException, IOException, QuantidadeNegativaOuZeroException{
         
         // 
         List<Produto> produtosCadastrados = new ArrayList<>();
         List<Venda> vendasRealizadas = new ArrayList<>();
-        
+
+     // TESTES
+        produtosCadastrados.add(new Produto(1, "Pao", 1.0, 5));
+        produtosCadastrados.add(new Produto(2, "Manteiga", 4.0, 5));
+
+        vendasRealizadas.add(new Venda(LocalDate.parse(now().format(formatter), formatter), produtosCadastrados.get(0), 2));
+        vendasRealizadas.add(new Venda(LocalDate.parse("15/09/2020", formatter), produtosCadastrados.get(1), 2));
+
+        for (Venda venda : vendasRealizadas) {
+            venda.finalizarVenda();
+        }
+ 
         int opcao = 5;
 
         Scanner in = new Scanner(System.in);
@@ -58,7 +77,7 @@ public class ProgramaLoja {
                 
             } catch(InputMismatchException ex) {
                 System.out.println("Digite Somente Números !!");
-                TimeUnit.SECONDS.sleep(1);
+                SECONDS.sleep(1);
                 in.nextLine();
                 opcao = -1; // Evita que valores anteriores atrapalhem o funcionamento
             } cls();
@@ -90,7 +109,7 @@ public class ProgramaLoja {
 
                     if(produtosCadastrados.size() == 0) {
                         System.out.println("Não existem produtos cadastrados para serem listados !!");
-                        TimeUnit.SECONDS.sleep(1);
+                        SECONDS.sleep(1);
                         voltarMenu();
                         continue;
                     }
@@ -262,7 +281,7 @@ public class ProgramaLoja {
                     } while(!verificador);
                     produtosCadastrados.add(produto);
                     System.out.println("Produto Cadastrado Com Sucesso!");
-                    TimeUnit.SECONDS.sleep(1);
+                    SECONDS.sleep(1);
                     
                     
                 }
@@ -294,7 +313,7 @@ public class ProgramaLoja {
 
                 if(vendasRealizadas.size() == 0) { // Retorna ao meno caso não haja nenhuma venda cadastrada ainda
                     System.out.println("Não existe nenhuma venda no momento para gerar Relatórios !!\n");
-                    TimeUnit.SECONDS.sleep(1);
+                    SECONDS.sleep(1);
                     voltarMenu();
                     continue;
                 }
@@ -454,7 +473,7 @@ public class ProgramaLoja {
                         
                     } catch(InputMismatchException ex) {
                         System.out.println("Digite Somente Números !!");
-                        TimeUnit.SECONDS.sleep(1);
+                        SECONDS.sleep(1);
                         in.nextLine();
 
                     } catch(QuantidadeNegativaOuZeroException ex) {
@@ -521,7 +540,7 @@ public class ProgramaLoja {
             */
             else if(opcao != 0 && opcao != -1) { // Verifição Extra para evitar aparecer duas mensagens de error na tela
                 System.out.println("Opção Inválida !!");
-                TimeUnit.SECONDS.sleep(1);
+                SECONDS.sleep(1);
                 voltarMenu();
             }
 
@@ -531,7 +550,7 @@ public class ProgramaLoja {
             Encerrar Programa - Opção 0:
         */
         System.out.println("\nFim do Programa!");
-        TimeUnit.MILLISECONDS.sleep(1500);
+        MILLISECONDS.sleep(1500);
         in.close();
     } // End Main
 
@@ -568,7 +587,7 @@ public class ProgramaLoja {
     // Função de Retornar ao menu chamando o método cls() para limpar o console
     private static void voltarMenu()  throws InterruptedException, IOException{
         System.out.println("Retornando ao Menu...");
-        TimeUnit.SECONDS.sleep(1);
+        SECONDS.sleep(1);
         cls();
     }
 
@@ -593,18 +612,16 @@ public class ProgramaLoja {
         System.out.print(dividirTelaProdutos);
         System.out.println();
 
-        // Ordena a lita por valor para obter na primeira posição o menor valor e na última o maior
-        produtosCadastrados.sort(new CompararProdutosPorValor());
+        //
+        DoubleSummaryStatistics resumo = produtosCadastrados.stream() 
+            .collect(Collectors.summarizingDouble(Produto::getValor)); 
+        //
 
-        Double valorAvg = 0.0;
-        for (Produto produto : produtosCadastrados) {
-            valorAvg += produto.getValor();
-        }
-        valorAvg /= produtosCadastrados.size();
-        String valorMin = String.format("Valor Min: R$%.2f", produtosCadastrados.get(0).getValor());
-        String valorMax = String.format("Valor Max: R$%.2f", produtosCadastrados.get(produtosCadastrados.size() -1).getValor());
+        String valorMin = String.format("Valor Min: R$%.2f", resumo.getMin());
+        String valorMax = String.format("Valor Max: R$%.2f", resumo.getMax());
+        String valorAvg = String.format("Valor Avg: R$%.2f", resumo.getAverage());
 
-        System.out.format(formatoRodapeProdutos, valorMin, valorMax, "Valor Avg: R$ " + String.valueOf(valorAvg));
+        System.out.format(formatoRodapeProdutos, valorMin, valorMax, valorAvg);
     }
 
 
@@ -642,6 +659,7 @@ public class ProgramaLoja {
         Double valorTotal = 0.0;
 
         // Antes de Exibir, ordena as Venda por data para faciliar a vizualização
+        // Organiza a data da mais antiga para a mais recente
         novoArrayParaRelatorio.sort(new CompararVendaPorData());
 
         /* 
@@ -681,12 +699,10 @@ public class ProgramaLoja {
     */
     private static Produto listarProdutoPorId(List<Produto> produtosCadastrados, int codigoProduto) throws NoSuchElementException{
 
-        Produto produtoEncontrado = new Produto();
-
-        return produtoEncontrado = produtosCadastrados.stream()
-        .filter(p -> p.getCodigo() == codigoProduto)
-        .findFirst()
-        .get();
+        return produtosCadastrados.stream()
+            .filter(p -> p.getCodigo() == codigoProduto)
+            .findFirst()
+            .get();
     }
 
     /*
