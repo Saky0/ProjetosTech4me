@@ -8,7 +8,6 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.DoubleSummaryStatistics;
 import java.util.InputMismatchException;
-import java.util.IntSummaryStatistics;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
@@ -613,6 +612,11 @@ public class ProgramaLoja {
         System.out.println();
 
         //
+        /*
+            Cria um Sumário dos valores de todos os produtos e armazena automaticamente a média, min e max deles.
+            Após usa, usa o próprio para exibir na tela tais valores do produtos
+
+        */
         DoubleSummaryStatistics resumo = produtosCadastrados.stream() 
             .collect(Collectors.summarizingDouble(Produto::getValor)); 
         //
@@ -688,6 +692,9 @@ public class ProgramaLoja {
         }
         System.out.print(dividirTelaRelatorioVendas);
         System.out.printf("\n\tValor total de Vendas no Periodo: R$%.2f", valorTotal);
+
+        //
+        
         
     }
 
