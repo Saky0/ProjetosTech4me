@@ -2,7 +2,6 @@ package com.example.projetoprovabackend01v2.view.model;
 
 public class MusicaRequest {
     
-    private String id;
     private String titulo;
     private String artista;
     private String album;
@@ -10,12 +9,6 @@ public class MusicaRequest {
     private Integer anoLançamento;
     private String compositor;
     
-    public String getId() {
-        return id;
-    }
-    public void setId(String id) {
-        this.id = id;
-    }
     public String getTitulo() {
         return titulo;
     }
