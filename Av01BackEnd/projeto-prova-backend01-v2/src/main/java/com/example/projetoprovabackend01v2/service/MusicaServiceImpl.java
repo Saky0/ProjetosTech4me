@@ -80,9 +80,20 @@ public class MusicaServiceImpl implements MusicaService{
 
     // Usa o método criado no MusicaRepo. para obter Lista de Musicas por Titulo
     @Override
-    public Optional<List<MusicaDto>> obterMusicaPorTitulo(String Titulo) {
+    public Optional<List<MusicaDto>> obterMusicaPorTitulo(String titulo) {
         // TODO Auto-generated method stub
-        return null;
+        List<Musica> musicasEncontradasPorTitulo = repository.obterPorTitulo(titulo);
+
+        Optional<List<Musica>> optionalMusicas = Optional.of(musicasEncontradasPorTitulo);
+
+        if(optionalMusicas.isPresent()) {
+            return Optional.of(optionalMusicas.get()
+                .stream()
+                .map(msc -> mapper.map(msc, MusicaDto.class))
+                .collect(Collectors.toList()));
+        }
+
+        return Optional.empty();
     }
 
     // Usa o método criado no MusicaRepo. para obter uma lista de músicas sobre um album específico

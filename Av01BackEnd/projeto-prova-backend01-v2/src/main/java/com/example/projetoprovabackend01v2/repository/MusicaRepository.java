@@ -15,10 +15,14 @@ public interface MusicaRepository extends MongoRepository<Musica, String> {
         Query específica para Obter no DB uma lista de Documentos que possuam o 'album' especificado dentro
         do parâmetro
     */
-    @Query(value = "{'album': /?0/}")
+    @Query(value = "{'album': { $regex: /?0/, $options: 'i'}}")
     List<Musica> obterPorAlbum(String album);
 
-    @Query("{'titulo': /?0/i}")
-    List<Musica> obterPorTitulo(String palavra);
+    /*  
+        Obtem uma lista de musicas por um nome fornecido, podendos ser a musica exata ou alguma que possua os 
+        mesmo caracteres 
+    */
+    @Query("{'titulo': { $regex: /?0/, $options: 'i'}}")
+    List<Musica> obterPorTitulo(String titulo);
     
 }

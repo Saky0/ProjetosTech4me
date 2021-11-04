@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import javax.validation.Valid;
+
 import com.example.projetoprovabackend01v2.service.MusicaService;
 import com.example.projetoprovabackend01v2.shared.MusicaDto;
 import com.example.projetoprovabackend01v2.view.model.MusicaRequest;
@@ -21,11 +23,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-
-
-
-
 
 @RestController
 @RequestMapping("/api/musicas")
@@ -80,6 +77,25 @@ public class MusicaController {
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
     
+    // Retorna uma lista de musicas por meio de busca o titulo especificado no parametro do Get
+    @GetMapping(value="/titulo/{titulo}")
+    public ResponseEntity<List<MusicaResponse>> obterPorTitulo(@PathVariable String titulo) {
+        List<MusicaDto> musicasEncontradas = service.obterMusicaPorTitulo(titulo).get();
+
+        Optional<List<MusicaDto>> optionalMusicasEncontradas = Optional.of(musicasEncontradas);
+
+        if(optionalMusicasEncontradas.isPresent()) {
+            List<MusicaResponse> responses = optionalMusicasEncontradas.get()
+            .stream()
+            .map(msc -> mapper.map(msc, MusicaResponse.class))
+            .collect(Collectors.toList());
+
+            return new ResponseEntity<>(responses, HttpStatus.OK);
+        }
+
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+    
     
     //#endregion
     
@@ -87,7 +103,7 @@ public class MusicaController {
 
     // Recebe um Corpo JSON no formato Musica e armazena esse novo registro no BD
     @PostMapping    
-    public ResponseEntity<MusicaResponse> criarMusica(@RequestBody MusicaRequest MusicaNova) {
+    public ResponseEntity<MusicaResponse> criarMusica(@Valid @RequestBody MusicaRequest MusicaNova) {
         //TODO: process POST request
         MusicaDto dto = mapper.map(MusicaNova, MusicaDto.class);
 

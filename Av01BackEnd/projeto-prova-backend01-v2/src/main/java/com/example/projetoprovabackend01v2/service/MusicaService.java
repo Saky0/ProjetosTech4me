@@ -21,7 +21,7 @@ public interface MusicaService {
     
     // Para obter uma lista de Musicas a partir de um Titulo, podendo ser partes do nome ou o nome inteiro
     // Neste caso, retorna todas as musicas que contenham o padrão especificado
-    Optional<List<MusicaDto>> obterMusicaPorTitulo(String Titulo);
+    Optional<List<MusicaDto>> obterMusicaPorTitulo(String titulo);
     
     // No caso de um autor possui mais de uma música, retornar todas do album
     Optional<List<MusicaDto>> obterMusicasPorAlbum(String album);
