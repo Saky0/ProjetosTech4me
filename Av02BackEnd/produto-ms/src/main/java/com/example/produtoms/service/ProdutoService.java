@@ -17,6 +17,8 @@ public interface ProdutoService {
     // Inseri um novo Produto, mapeando o produto recebido para o objeto adequado
     ProdutoDto inserirNovoProduto(ProdutoDto dto);
 
+    // Inseri um novo Produto, mapeando o produto recebido para o objeto adequado 
+    
     //#endregion
 
 
