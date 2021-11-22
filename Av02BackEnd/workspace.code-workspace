@@ -17,6 +17,10 @@
 		{
 			"name": "produto-ms",
 			"path": "produto-ms"
+		},
+		{
+			"name": "venda-ms",
+			"path": "venda-ms"
 		}
 	],
 	"settings": {}

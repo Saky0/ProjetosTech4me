@@ -1,21 +1,18 @@
-package com.example.produtoms.view.model;
+package com.example.vendams.shared;
 
-import javax.validation.constraints.DecimalMin;
-import javax.validation.constraints.Min;
-
-public class ProdutoRequest {
+public class Produto {
+    private String id;
     private int codigo;
     private String descricao;
-
-    /*
-        O preço minimo de um produto é 0.01 no caso de cadastrar um produto muito barato como uma bala
-    */
-    @DecimalMin(value = "0.01", message = "O Valor do Produto deve ser > 0")
     private Double valor;
-
-    @Min(value = 1, message = "A quantidade do Produto deve ser >= 1")
     private int quantidadeEstoque;
-    
+
+    public String getId() {
+        return id;
+    }
+    public void setId(String id) {
+        this.id = id;
+    }
     public int getCodigo() {
         return codigo;
     }
@@ -40,5 +37,4 @@ public class ProdutoRequest {
     public void setQuantidadeEstoque(int quantidadeEstoque) {
         this.quantidadeEstoque = quantidadeEstoque;
     }
-
 }
