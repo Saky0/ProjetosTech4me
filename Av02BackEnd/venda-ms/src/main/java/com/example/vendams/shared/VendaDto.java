@@ -5,7 +5,6 @@ import java.util.List;
 
 public class VendaDto {
     private String id;
-    private String codigo;
     private LocalDate dataVenda;
     private Double valorTotal;
     private List<Produto> produtosVendidos;
@@ -15,12 +14,6 @@ public class VendaDto {
     }
     public void setId(String id) {
         this.id = id;
-    }
-    public String getCodigo() {
-        return codigo;
-    }
-    public void setCodigo(String codigo) {
-        this.codigo = codigo;
     }
     public LocalDate getDataVenda() {
         return dataVenda;

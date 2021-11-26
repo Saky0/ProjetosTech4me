@@ -93,21 +93,20 @@ public class VendaController {
         Utiliza a Classe PeriodoDeVendasDto como uma forma de receber um @RequestBody com a dataInicial
         e a dataFinal
     */
-    @GetMapping(value = "/periodo")
+    @GetMapping("/periodo")
     public ResponseEntity<List<VendaResponse>> obterVendaPorPeriodo(@RequestBody PeriodoDeVendasDto periodo) {
         // TODO Auto-generated method stub
-        List<VendaDto> listVendas = service.obterVendaPorPeriodo(periodo).get();
+        List<VendaDto> listVendas = service.obterVendaPorPeriodo(periodo);
 
-        Optional<List<VendaDto>> optionalVendas = Optional.of(listVendas);
+        if(!listVendas.isEmpty()) {
+            List<VendaResponse> listResponseVendas = listVendas.stream()
+                .map(venda -> mapper.map(venda, VendaResponse.class))
+                .collect(Collectors.toList());
 
-        if(optionalVendas.isPresent()) {
-            List<VendaResponse> listResponseVendas = optionalVendas.get().stream()
-            .map(venda -> mapper.map(venda, VendaResponse.class))
-            .collect(Collectors.toList());
-
-            return new ResponseEntity<>(listResponseVendas, HttpStatus.FOUND);
+                return new ResponseEntity<>(listResponseVendas, HttpStatus.FOUND);
         }
 
-        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        return new ResponseEntity<>(HttpStatus.NOT_ACCEPTABLE);
+
     }
 }

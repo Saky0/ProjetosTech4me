@@ -93,5 +93,19 @@ public class ProdutoServiceImpl implements ProdutoService{
 
         return Optional.empty();
     }
+
+    // Busca um produto pelo seu respectivo código, este definido no momento de seu cadastro
+    @Override
+    public Optional<ProdutoDto> obterProdutoPorCodigo(int codigo) {
+        // TODO Auto-generated method stub
+        Optional<Produto> optional = repository.findByCodigo(codigo);
+
+        if(optional.isPresent()) {
+            
+            return Optional.of(mapper.map(optional.get(), ProdutoDto.class));
+        }
+
+        return Optional.empty();
+    }
     
 }

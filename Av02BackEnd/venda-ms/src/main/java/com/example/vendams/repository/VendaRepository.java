@@ -11,9 +11,13 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface VendaRepository extends MongoRepository<Venda, String> {
-    
-    @Query("{$and: [{'dataVenda': {$gte: ?0} }, {'dataVenda': {$lte: ?1} }] }   ")
-    List<Venda> obterVendasPorPeriodo(LocalDate dataInicial, LocalDate dataFinal);
 
-    
+    // @Query(value = "{'dataVenda': {$not: {$lt: ?0, $gt: ?1} }}")
+    /*
+        No final o que agt fez não funcionou, ele retorna todas as vendas independente da data :v
+        Acabei optando por fzr o obterVendaPorPeriodo de maneira mais "Rústica", obtendo
+        a lista completa de vendas e filtrando dentro do
+    */
+    @Query(value = "{'dataVenda':{$not: {$lt: ?0, $gt: ?1} }}")
+    List<Venda> obterVendaPorPeriodo(LocalDate dataInicial, LocalDate dataFinal);
 }

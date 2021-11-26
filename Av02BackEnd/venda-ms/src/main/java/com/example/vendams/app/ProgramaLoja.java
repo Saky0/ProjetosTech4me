@@ -1,9 +1,12 @@
 package com.example.vendams.app;
 
+import static java.time.format.DateTimeFormatter.ofPattern;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
+
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import static java.time.format.DateTimeFormatter.ofPattern;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.DoubleSummaryStatistics;
@@ -14,21 +17,24 @@ import java.util.Optional;
 import java.util.Scanner;
 import java.util.stream.Collectors;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.time.LocalDate.now;
-
-import com.example.vendams.clienteHTTP.ProdutoFeignClient;
-import com.example.vendams.clienteHTTP.VendaFeignClient;
-import com.example.vendams.exceptions.*;
+import com.example.vendams.clienteHTTP.ProdutoInterMongoDB;
+import com.example.vendams.clienteHTTP.VendaInterMongoDB;
+import com.example.vendams.interfaces.ProdutoBDConnect;
+import com.example.vendams.interfaces.VendaBDConnect;
 import com.example.vendams.shared.Produto;
-import com.example.vendams.view.model.VendaResponse;
-import com.example.vendams.utility.*;
+import com.example.vendams.shared.VendaDto;
+import com.example.vendams.utility.CompararVendaPorData;
 
-import org.springframework.beans.factory.annotation.Autowired;
-
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 
 public class ProgramaLoja {
+
+    /*
+        Sistema de vendas não está completo por enquanto
+        falta terminar de resolver o problema ao fazer um post nas vendas para a API
+
+    */
     
     
     //#region Constantes usadas para montar as "tabelas" ou outros atributos dependentes de constantes
@@ -37,24 +43,29 @@ public class ProgramaLoja {
     final static String formatoDoSyouFormatTitulo = "%10s %40s %17s %17s";
     final static String formatoDoSysouFormatProdutos = "%10d %40s %17.2f %17d";
     final static String formatoRodapeProdutos = "%25s %25s %25s";
+    final static String formatoRodapeProdutosVendidos = "%25s";
     final static DateTimeFormatter formatter = ofPattern("dd/MM/yyyy");
     final static String padraoData = "\\d{2}/\\d{2}/\\d{4}";
     final static String formatoTituloRelatorioVenda = "%15s %18s %40s %12s %21s";
     final static String formatoCorpoRelatorioVenda = "%15s %18.2f %40s %12d %21.2f";
     //#endregion
 
-    @Autowired
-    private static ProdutoFeignClient produtoClient;
 
-    @Autowired
-    private static VendaFeignClient vendaClient;
+    /*
+        Não consigo usar o ProdutoFeign de jeito nenhum dentro na main, por causa do @Autowired, que sempre retorna valores 
+        nulos para a injeção de bean, msm tal sendo criado e especificado
+        :3
+    */
+    private static ProdutoBDConnect produtoConnect = new ProdutoInterMongoDB();
 
-    public static void main (String[] args) throws InterruptedException, IOException, QuantidadeNegativaOuZeroException{
+    private static VendaBDConnect vendaConnect = new VendaInterMongoDB();
+
+    public static void main (String[] args) throws Exception{
         
         // 
         List<Produto> produtosCadastrados = new ArrayList<>();
-        List<VendaResponse> vendasRealizadas = new ArrayList<>();
- 
+        List<VendaDto> vendasRealizadas = new ArrayList<>();
+        
         int opcao = 5;
 
         Scanner in = new Scanner(System.in);
@@ -96,6 +107,7 @@ public class ProgramaLoja {
                 System.out.println("===========================");
                 System.out.println("1 - Listar Produtos / Buscar por Id");
                 System.out.println("2 - Incluir Novo Produto");
+                System.out.println("3 - Adicionar estoque de um Produto existente");
                 System.out.println("0 - Sair");
                 System.out.print("\nOpcao: ");
                 
@@ -109,11 +121,18 @@ public class ProgramaLoja {
 
                     // Consome a API dos produtos para obter todos os produtos cadastrados,
                     // Se não houver nenhum presente no optional, retorna ao menu
-                    List<Produto> listaProdutos = produtoClient.obterProdutos();
+                    List<Produto> listProdutos = new ArrayList<>();
 
-                    Optional<List<Produto>> optProdutos = Optional.of(produtosCadastrados);
+                    try {
+                        listProdutos = produtoConnect.obterTodosProdutos();
 
-                    if(!optProdutos.isPresent()) {
+                    } catch(HttpClientErrorException ex) {
+                        System.out.println("Serviço indisponível no Momento!");
+                        voltarMenu();
+                        continue;
+                    }
+                
+                    if(listProdutos.isEmpty()) {
                         System.out.println("Não existem produtos cadastrados para serem listados !!");
                         SECONDS.sleep(1);
                         voltarMenu();
@@ -136,7 +155,7 @@ public class ProgramaLoja {
 
                     if(verificacaoEntrada.equals("") || !verificacaoEntrada.matches("[0-9]*")) { // Caso a entrada seja Apenas ENTER, lista todos existentes
 
-                        listarProdutosCadastrados(optProdutos.get()); // Método para listar todos os produtos cadastrados 
+                       listarProdutosCadastrados(listProdutos); // Método para listar todos os produtos cadastrados 
 
                     } else { // Segue caso tenha digitado algum código válido
 
@@ -149,31 +168,40 @@ public class ProgramaLoja {
                                 encontrada, caso não encontre nada, gera uma exceção de NullPointerException()
                         */
                         int codigoProduto = Integer.parseInt(verificacaoEntrada);
+                        Optional<Produto> produtoEncontrado = Optional.empty();
 
-                        //
-                        Produto produtoEncontrado = new Produto();
+                        try {
+                            produtoEncontrado = produtoConnect.obterProdutoPorCodigo(codigoProduto);
 
-                        try{
-                            produtoEncontrado = listarProdutoPorId(optProdutos.get(), codigoProduto);
-                        } catch(NoSuchElementException ex) {
-                            System.out.println("Nao foi encontrado nenhum produto com o Codigo: " + codigoProduto);
-                            System.out.println("\nPressioner ENTER para sair");
-                            in.nextLine();
+                        } catch(HttpClientErrorException ex) {
+                            System.out.println("Serviço indisponível");
                             voltarMenu();
                             continue;
-                        }
-                        // Mesmo formato de Exibiçào da Lista de Produtos, porém adaptada para somente um Produto
-                        System.out.println("\nProduto Encontrado: \n");
-                        System.out.format(formatoDoSyouFormatTitulo, "Id", "Nome Produto", "Valor", "Estoque");
-                        System.out.print(dividirTelaProdutos);
+                        } 
 
-                        System.out.println();
-                        System.out.format(formatoDoSysouFormatProdutos, produtoEncontrado.getCodigo(),
-                            produtoEncontrado.getDescricao(), produtoEncontrado.getValor(), produtoEncontrado.getQuantidadeEstoque() );
+                        // Se o produto existir, o lista
+                        if(produtoEncontrado.isPresent()) {
+                            // Mesmo formato de Exibiçào da Lista de Produtos, porém adaptada para somente um Produto
+                            System.out.println("\nProduto Encontrado: \n");
+                            System.out.format(formatoDoSyouFormatTitulo, "Id", "Nome Produto", "Valor", "Estoque");
+                            System.out.print(dividirTelaProdutos);
+
+                            System.out.println();
+                            System.out.format(formatoDoSysouFormatProdutos, produtoEncontrado.get().getCodigo(),
+                                produtoEncontrado.get().getDescricao(), 
+                                produtoEncontrado.get().getValor(), 
+                                produtoEncontrado.get().getQuantidadeEstoque());
+                            
+                    
+                            System.out.print(dividirTelaProdutos);
+                            /////
+                        } else {
+
+                            System.out.printf("\nNenhum produto encontrado com o código: %d\n", codigoProduto);
+                        }
+
+
                         
-                
-                        System.out.print(dividirTelaProdutos);
-                        /////
                     }
 
 
@@ -203,14 +231,24 @@ public class ProgramaLoja {
                             codigo = in.nextInt();
                             in.nextLine();
 
+                            // Verificar se o código digitado é negativo:
+                            if(codigo < 1) {
+                                System.out.print("\nO Código deve ser > 0!");
+                                System.out.print("\nCodigo: ");
+                                continue;
+                            }
+
+
                             // Verifica se já existe algum produto com este código, se sim, pede para digitar novamente
-                            if(verificarCodigoRepetidoNoArray(produtosCadastrados, codigo)) {
+                            Optional<Produto> optional = produtoConnect.obterProdutoPorCodigo(codigo);
+
+                            if(optional.isPresent()) {
                                 System.out.println("Este codigo ja pertence a um produto, digite novamente !!");
                                 System.out.print("\nCodigo: ");
                                 continue;
                             }
 
-                            produto.setCodigo(codigo);
+                            
                             verificador = true;
 
                         } catch(InputMismatchException ex) {
@@ -223,14 +261,32 @@ public class ProgramaLoja {
                             verificador = false;
                             break;
 
-                        } /* catch(CodigoNegativoException ex) {
-                            /* 
-                                Estrutura para tratar a possível exceção do usuário digitar um código que seja negativo
-                            */ /* 
-                            System.out.println(ex.getMessage());
-                            System.out.print("\nCódigo: ");
-                        } */
+                        } catch(HttpClientErrorException ex) {
 
+                            /*
+                                Em caso de o resultado da busca não encontrar o produto, ele retorna a mesma exceção
+                                de serviço indisponível, logo, usa-se o ENUM de HttpStatus para filtrar em cima da
+                                exceção exata
+
+                                NOT_ACCEPTABLE é o retorno definido em ProdutoController, como o status caso nenhum 
+                                produto seja encontrado
+                            */
+                            switch(ex.getStatusCode()) {
+                                case NOT_ACCEPTABLE:
+                                    System.out.println("\nNenhum produto com código especificado!, Seguindo o cadastro...\n");
+                                    verificador = true;
+                                    produto.setCodigo(codigo);
+                                    break;
+                                
+                                case NOT_FOUND:
+                                    System.out.println("Serviço indisponível");
+                                    verificador = false;
+                                    break;
+                                default:
+                                    break;
+                            }
+                            break;
+                        }
                     }while(!verificador);
 
                     if(!verificador) {
@@ -245,22 +301,26 @@ public class ProgramaLoja {
                     System.out.println("\nDigite o Valor do Produto: ");
                     verificador = false;
                     do {
-                        /* try{
+                        try{
                             
-                            produto.setValor(in.nextDouble());
+                            double valor = in.nextDouble();
                             in.nextLine();
 
+                            // Verificar se o valor é negativo / diferente do mínimo permitido
+                            if(valor < 0.01) {
+                                System.out.println("O Valor deve ser positivo / maior que 0.01!!");
+                                System.out.print("\nValor: ");
+                                continue;
+                            }
+
+                            produto.setValor(valor);
                             verificador = true;
 
                         } catch(InputMismatchException ex) {
                             System.out.println("Digite Apenas numeros e ponto !!");
                             System.out.print("\nValor: ");
                             in.nextLine();
-                        } catch(QuantidadeNegativaOuZeroException ex) {
-                            System.out.println(ex.getMessage());
-                            System.out.print("\nValor: ");
-                            in.nextLine();
-                        } */
+                        } 
 
                     } while(!verificador);
                     verificador = false;
@@ -268,30 +328,211 @@ public class ProgramaLoja {
 
                     System.out.println("\nDigite a Quantidade de estoque do Produto: ");
                     do {
-                        /* try{
-                            produto.setQuantidadeEstoque(in.nextInt());
+                        try{
+                            int quantidade = in.nextInt();
                             in.nextLine();
 
+                            // Verificar se a quantidade é < 1
+                            if(quantidade < 1) {
+                                System.out.println("O Valor deve ser maior ou igual a 1!!");
+                                System.out.print("\nQuantidade: ");
+                                continue;
+                            } 
+
+                            produto.setQuantidadeEstoque(quantidade);
                             verificador = true;
 
                         } catch(InputMismatchException ex) {
                             System.out.println("Digite Apenas numeros !!");
                             System.out.print("\nQuantidade: ");
                             in.nextLine();
-                        } catch(QuantidadeNegativaOuZeroException ex) {
-                            System.out.println(ex.getMessage());
-                            System.out.print("\nQuantidade: ");
-                            in.nextLine();
-                        } */
+                        }
 
                     } while(!verificador);
-                    produtosCadastrados.add(produto);
-                    System.out.println("Produto Cadastrado Com Sucesso!");
-                    SECONDS.sleep(1);
-                    
+
+                    Produto produtoCadastrado = new Produto();
+
+                    try {
+                        produtoCadastrado = produtoConnect.inserirNovoProduto(produto);
+
+                        System.out.printf("\nProduto - %s - Cadastrado Com Sucesso!\n", produtoCadastrado.getDescricao());
+                        in.nextLine();
+                        SECONDS.sleep(1);
+
+                    } catch(HttpClientErrorException ex) {
+
+                        /*
+                        Em caso de o resultado da busca não encontrar o produto, ele retorna a mesma exceção
+                        de serviço indisponível, logo, usa-se o ENUM de HttpStatus para filtrar em cima da
+                        exceção exata
+
+                        NOT_ACCEPTABLE é o retorno definido em ProdutoController, como o status caso nenhum 
+                        produto seja encontrado
+                        */
+                        switch(ex.getStatusCode()) {
+                            case NOT_ACCEPTABLE:
+                            /*
+                                Retorna este status caso alguma validação do Serviço de Produto tenha sido violada
+                                segue enviando as violações realizadas 
+                            */
+                                System.out.println("\n" + ex.getMessage() + "\n");
+
+                                verificador = true;
+                                break;
+                            
+                            case NOT_FOUND:
+                                System.out.println("Serviço indisponível");
+                                verificador = false;
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+
                     
                 }
                 
+                // UPDATE
+                // Permite atualizar a quantidade de estoque de um produto
+                else if (opcao == 3) {
+                    
+                    List<Produto> listProdutos = new ArrayList<>();
+
+                    try {
+                        listProdutos = produtoConnect.obterTodosProdutos();
+
+                    } catch(HttpClientErrorException ex) {
+                        System.out.println("Serviço indisponível no Momento!");
+                        voltarMenu();
+                        continue;
+                    }
+
+                    if(listProdutos.isEmpty()) {
+                        System.out.println("Não existem produtos para serem atualizados!");
+                        voltarMenu();
+                        continue;
+                    }
+
+                    // Se tudo ocorrer bem, segue para alterar o estoque do produto
+                    boolean verificador = false;
+                    String verificacaoEntrada;
+                    Produto produtoEncontrado = new Produto();
+
+                    // Buscar produto pelo ID
+                    System.out.println("\nPara retornar ao menu, digites quaisquer caractere alfabético");
+                    System.out.print("\nDigite a codigo do Produto: ");
+                    do {
+                        verificacaoEntrada = in.nextLine();
+                        // Cuida de caso digitar algum caractere alfabético, retorna ao Menu
+                        if(!verificacaoEntrada.matches("[0-9]*") 
+                            || verificacaoEntrada.equals("")) {
+                            break;
+                        }
+
+                        int codigo = Integer.parseInt(verificacaoEntrada);
+                        
+                        try {
+
+                            Optional<Produto> optional = produtoConnect.obterProdutoPorCodigo(codigo);
+                            produtoEncontrado = optional.get();
+
+                            verificador = true;
+
+                        } catch(HttpClientErrorException ex) {
+                            switch(ex.getStatusCode()) {
+                                case NOT_ACCEPTABLE:
+                                    System.out.println("\nNao foi encontrado nenhum produto com o Codigo fornecido");
+                                    System.out.println("Digite Novamente um código válido");
+                                    System.out.print("\nCodigo: ");
+                                    break;
+                                
+                                case NOT_FOUND:
+                                    System.out.println("Serviço indisponível");
+                                    verificador = true;
+                                    break;
+                                default:
+                                    break;
+                            }
+                        }
+
+
+                    } while(!verificador);
+
+                    if(!verificador) {
+                        voltarMenu();
+                        continue;
+                    }
+
+                    verificador = false;
+                    // QTD
+                    System.out.println("\nPara retornar ao menu, digites quaisquer caractere alfabético");
+                    System.out.print("Digite a Quantidade de estoque do Produto: ");
+                    do {
+                        verificacaoEntrada = in.nextLine();
+                        // Cuida de caso digitar algum caractere alfabético, retorna ao Menu
+                        if(!verificacaoEntrada.matches("[0-9]*") 
+                            || verificacaoEntrada.equals("")) {
+                            break;
+                        }
+
+                        int quantidade = Integer.parseInt(verificacaoEntrada);
+                        
+                        // Verificar se a quantidade é < 1
+                        if(quantidade < 1) {
+                            System.out.println("O Valor deve ser maior ou igual a 1!!");
+                            System.out.print("\nQuantidade: ");
+                            continue;
+                        } 
+
+                        produtoEncontrado.setQuantidadeEstoque(quantidade);
+
+                        verificador = true;
+
+
+                    } while(!verificador);
+
+                    // Após, realizar o PUT
+                    try {
+                        produtoEncontrado = produtoConnect.atualizarProduto(produtoEncontrado);
+
+                        System.out.printf("\nProduto - %s - Atualizado Com Sucesso!\n", produtoEncontrado.getDescricao());
+                        exibirDadosDoProduto(produtoEncontrado);
+                        in.nextLine();
+                        SECONDS.sleep(1);
+
+                    } catch(HttpClientErrorException ex) {
+
+                        /*
+                        Em caso de o resultado da busca não encontrar o produto, ele retorna a mesma exceção
+                        de serviço indisponível, logo, usa-se o ENUM de HttpStatus para filtrar em cima da
+                        exceção exata
+
+                        NOT_ACCEPTABLE é o retorno definido em ProdutoController, como o status caso nenhum 
+                        produto seja encontrado
+                        */
+                        switch(ex.getStatusCode()) {
+                            case NOT_ACCEPTABLE:
+                            /*
+                                Retorna este status caso alguma validação do Serviço de Produto tenha sido violada
+                                segue enviando as violações realizadas 
+                            */
+                                System.out.println("\n" + ex.getMessage() + "\n");
+
+                                verificador = true;
+                                in.nextLine();
+                                break;
+                            
+                            case NOT_FOUND:
+                                System.out.println("Serviço indisponível");
+                                verificador = false;
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+
+                }
+
                 // RETURN
                 // Retorna ao Menu Principal
                 else if(opcao == -1) {
@@ -312,12 +553,13 @@ public class ProgramaLoja {
             /*
                 Relatório - Opção 2:
                 Gera relatório de:
-                    - Produtos cadastrados
                     - Vendas (Detalhadas)
             */
             else if(opcao == 2) {
 
-                if(vendasRealizadas.size() == 0) { // Retorna ao meno caso não haja nenhuma venda cadastrada ainda
+                List<VendaDto> vendas = vendaConnect.obterTodasVendas();
+
+                if(vendas.isEmpty()) { // Retorna ao meno caso não haja nenhuma venda cadastrada ainda
                     System.out.println("Não existe nenhuma venda no momento para gerar Relatórios !!\n");
                     SECONDS.sleep(1);
                     voltarMenu();
@@ -407,7 +649,23 @@ public class ProgramaLoja {
             */
             else if(opcao == 3) {
 
-                if(produtosCadastrados.size() == 0) {
+                List<Produto> listProdutos = new ArrayList<>();
+
+                try {
+                    listProdutos = produtoConnect.obterTodosProdutos();
+
+                } catch(HttpClientErrorException ex) {
+                    System.out.println("Serviço indisponível no Momento!");
+                    voltarMenu();
+                    continue;
+                } catch(HttpServerErrorException ex) {
+                    System.out.println("Serviço indisponível no Momento!");
+                    voltarMenu();
+                    continue;
+                }
+
+                // Valida se existem produtos cadastrados
+                if(listProdutos.size() == 0) {
                     System.out.println("Não existem produtos cadastrados para vender!!");
                     voltarMenu();
                     opcao = -1;
@@ -418,91 +676,359 @@ public class ProgramaLoja {
                 System.out.println("===== Realizar Venda =====");
                 System.out.println("==========================");
 
-                System.out.println("** Caso queira voltar, digite quaisquer caractere alfabético ** \n");
-
-                System.out.println("Digite o Id do Produto:");
-
-
+                System.out.println("** Caso queira voltar, digite quaisquer caractere alfabéticos\n");
                 
+                //#region Inserir Produto Individual
                 String verificacaoEntrada = ""; 
                 boolean verificador = false;
-                VendaResponse novaVenda = new VendaResponse();
+
+                VendaDto novaVenda = new VendaDto();
+                novaVenda.setProdutosVendidos(new ArrayList<>());
+
+                Produto produtoVendido;
 
                 /*
-                    Repetição para fazer a coleta se caso um código válido, inválidou ou caractere alfabético seja
-                    digitado pelo usuário
+                    Como pode ser adicionado mais de um produto, esta lista serve para armzenar temporariamente
+                    os produtos escolhidos, caso um mesmo produto seja escolhido novamente e o estoque não seja suficiente,
+                    esta lista servirá para validar este estoque
                 */
-                do{
-                    try{
+                List<Produto> produtosSelecionados = new ArrayList<>();
+
+                /*
+                    Vai definir se os produtos foram selecionados e se a venda pode ser realizada
+                */
+                boolean realizarVenda = false;
+
+                /*
+                    usada para se caso a quantidade desejada de um produto já existente na lista de venda seja 
+                    inválida, ai caso o usuário deseje retornar ao menu, será usado esse validador
+                */
+                boolean quantidadeInvalida = false;
+
+                /*
+                    Serve para validar quando o serviço não estiver disponível e retornar ao menu
+                */
+                boolean servicoDisponivel = true;
+
+                do {
+                    cls();
+                    realizarVenda = false;
+                    verificador = false;
+
+                    produtoVendido = new Produto();
+                    //#region ID PRODUTO
+                    System.out.println("Digite o Id do Produto:");
+
+                    /*
+                        Repetição para fazer a coleta se caso um código válido, inválidou ou caractere alfabético seja
+                        digitado pelo usuário
+                    */
+                    do{
                         verificacaoEntrada = in.nextLine();
-                        // Cuida de caso digitar algum caractere alfabético, retorna ao Menu
-                        if(!verificacaoEntrada.matches("[0-9]*") || verificacaoEntrada.equals("")) {
+
+                        // Verifica se deve-se prosseguir para finalizar a venda
+                        if(verificacaoEntrada.equals("finish")) {
+                            realizarVenda = true;
+                            verificador = false;
                             break;
                         }
+
+                        // Cuida de caso digitar algum caractere alfabético, retorna ao Menu
+                        if(!verificacaoEntrada.matches("[0-9]*") 
+                            || verificacaoEntrada.equals("")) {
+                            break;
+                        }
+
+                        
 
                         // Passa o valor digitado para "codigo"
                         int codigo = Integer.parseInt(verificacaoEntrada);
 
-                        // Passo o codigo para a Stream e busca um produto com o código fornecido
-                        /* novaVenda.setProdutoVendido(produtosCadastrados.stream()
-                        .filter(p -> p.getCodigo() == codigo)
-                        .findFirst()
-                        .get());  */
-                        
-                        verificador = true;
-                    } catch(NoSuchElementException ex) {
-                        System.out.println("\nNao foi encontrado nenhum produto com o Codigo fornecido");
-                        System.out.println("Digite Novamente um código válido");
-                        System.out.print("\nCodigo: ");
-                        
-                    } 
+                        try{
+                            
+                            // Passo o codigo para a Stream e busca um produto com o código fornecido
+                            Optional<Produto> optional = produtoConnect.obterProdutoPorCodigo(codigo);
+                            produtoVendido = optional.get();
 
-                }while(!verificador);
+                            
 
-                if(!verificador) { // Saída para o Menu caso digite caracteres alfabéticos
+                            verificador = true;
+
+                            if (verificarProdutoExistenteNaVenda(produtosSelecionados, produtoVendido)) {
+
+                                for (Produto produtoVerificacao : produtosSelecionados) {
+                                    /* 
+                                        Caso o produto ja tenha sido escolhido, verifica se o estoque dele na lista 
+                                        temporária é > 0, caso não, ele não possui mais quantidade para ser vendido e
+                                        deve ser escolhido outro produto
+                                        
+                                    */
+                                    if(produtoVendido.getCodigo() == produtoVerificacao.getCodigo()) {
+                                        if(produtoVerificacao.getQuantidadeEstoque() == 0) {
+                                            System.out.printf("O produto - %s - escolhido não possui mais estoque", 
+                                                produtoVerificacao.getDescricao());
+                                            System.out.println("\nDigite o código de outro Produto ou digite \"finish\" para finalizar a venda");
+                                            System.out.print("\nDigite: ");
+                                            verificador = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                                continue;
+                            } 
+
+                            exibirDadosDoProduto(optional.get());
+
+                        } catch(HttpClientErrorException ex) {
+                            
+                            switch(ex.getStatusCode()) {
+                                case NOT_ACCEPTABLE:
+                                    System.out.println("\nNao foi encontrado nenhum produto com o Codigo fornecido");
+                                    System.out.println("Digite Novamente um código válido");
+                                    System.out.print("\nCodigo: ");
+                                    break;
+                                
+                                case NOT_FOUND:
+                                    System.out.println("\nServiço indisponível");
+                                    verificador = true;
+                                    servicoDisponivel = false;
+                                    break;
+                                default:
+                                    break;
+                            }
+                            
+                        } catch(HttpServerErrorException ex) {
+                            System.out.println("\nServiço indisponível");
+                            verificador = false;
+                            break;
+                        } catch (NoSuchElementException ex) {
+                            System.out.println("\nErro interno - Não foi possivel procurar o produto selecionado");
+                            verificador = false;
+                            // in.nextLine();
+                            break;  
+                        }
+
+
+                    }while(!verificador);
+
+                    /*
+                        Se caso o produto selecionado não possua mais estoque e seja necessário prosseguir para finalizar
+                        a venda, executa esse If e pula direto para finalizar a venda
+                        um tratamento sera realizado para caso pule para "Finalizar venda" sem ter selecionado no minimo
+                        1 produto, este ficará mais abaixo
+                    */
+                    if(realizarVenda) {
+                        cls();
+                        break;
+                    }
+
+                    if(!verificador || !servicoDisponivel) { // Saída para o Menu caso digite caracteres alfabéticos
+                        voltarMenu();
+                        break;
+                    }
+
+                    //#endregion
+
+                    // Prossegue o cadastro das vendas
+                    verificador = false;
+                    quantidadeInvalida = false;
+
+                    //#region QUANTIDADE VENDIDA
+                    System.out.printf("Digite a quantidade de Venda do Produto \"%s\"", produtoVendido.getDescricao());
+                    System.out.print("\nQuantidade: ");
+
+                    do {
+                        
+                        verificacaoEntrada = in.nextLine();
+                        // Cuida de caso digitar algum caractere alfabético, retorna ao Menu
+                        if(!verificacaoEntrada.matches("[0-9]*") 
+                            || verificacaoEntrada.equals("")) {
+                            quantidadeInvalida = true;
+                            break;
+                        }
+
+                        // Passa o valor digitado para "quantidadeEstoque"
+                        int quantidade = Integer.parseInt(verificacaoEntrada);
+
+                        // verifica se a quantidade deseja existe no produto atual
+                        if(quantidade > produtoVendido.getQuantidadeEstoque()) {
+                            System.out.printf("\nA quantidade solicitada do produto \"%s\" não está disponível\n", produtoVendido.getDescricao());
+                            System.out.printf("Digite uma quantidade que seja igual ou menor a %d ou digite caracteres numéricos para sair\n", 
+                                produtoVendido.getQuantidadeEstoque());
+                            System.out.print("Digite: ");
+                            verificador = false;
+                            continue;
+                        } 
+
+                        // Verificar se o produto ja foi adicionado a venda e sua quantidade atual disponível
+                        if(verificarProdutoExistenteNaVenda(produtosSelecionados, produtoVendido)) {
+
+                            // Se o produto existir, sera feito uma validação se a quantidade desejada ainda persiste
+                            for (Produto produtoVerificacao : produtosSelecionados) {
+                                // Caso seja o mesmo código, prossegue
+                                if(produtoVerificacao.getCodigo() == produtoVendido.getCodigo()) {
+
+                                    // verifica se a quantidade deseja existe no produto atual
+                                    if(quantidade > produtoVerificacao.getQuantidadeEstoque()) {
+                                        System.out.printf("\nA quantidade solicitada do produto \"%s\" não está disponível\n", produtoVendido.getDescricao());
+                                        System.out.printf("Digite uma quantidade que seja igual ou menor a %d ou digite caracteres numéricos para sair\n", 
+                                            produtoVerificacao.getQuantidadeEstoque());
+                                        System.out.print("Digite: ");
+                                        verificador = false;
+                                        break;
+                                    } else {
+                                        /*
+                                            Caso a quantidade não ultrapasse o permitido,
+                                            altera a nova quantidade na lista temporária e adiciona um novo
+                                            produto à venda
+                                        */
+                                        int quantidadeAtual = produtoVerificacao.getQuantidadeEstoque();
+    
+                                        produtoVerificacao.setQuantidadeEstoque(quantidadeAtual - quantidade);
+
+                                        produtoVendido.setQuantidadeEstoque(quantidade);
+
+                                        // Adiciona à venda
+                                        novaVenda.getProdutosVendidos().add(produtoVendido);
+
+                                        verificador = true;
+                                    }
+                                } 
+                            }
+
+                        } else {
+                            Produto produtoTemporario = new Produto();
+                            produtoTemporario.setId(produtoVendido.getId());
+                            produtoTemporario.setCodigo(produtoVendido.getCodigo());
+                            produtoTemporario.setDescricao(produtoVendido.getDescricao());
+                            produtoTemporario.setValor(produtoVendido.getValor());
+                            produtoTemporario.setQuantidadeEstoque(produtoVendido.getQuantidadeEstoque());
+
+                            int estoqueAtual = produtoTemporario.getQuantidadeEstoque();
+
+                            // Define o estoque na lista temporária com a quantidade após a "venda"
+                            produtoTemporario.setQuantidadeEstoque(estoqueAtual - quantidade);
+
+                            // Adiciona à lista temporária  
+                            produtosSelecionados.add(produtoTemporario);
+
+                            /*
+                                A Quantidade do estoque servirá para anotar quanto do produto foi vendido
+                                na hora de realizar a venda e remover do estoque a quantidade vendida,
+                                pega-se a quantidade de venda e se subtrai pelo estoque original do produto
+
+                                5 - 2
+                            */  
+                            produtoVendido.setQuantidadeEstoque(quantidade);
+
+                            // Adiciona à lista temporária
+                            novaVenda.getProdutosVendidos().add(produtoVendido);
+                            verificador = true;
+                        }
+                        
+                        
+
+                    } while(!verificador); 
+
+                    //#endregion
+
+                    // Sai do loop principal de inserção de produtos
+                    if(quantidadeInvalida) {
+                        voltarMenu();
+                        break;
+                    }
+
+
+                    System.out.println("\nProduto adicionado à venda com sucesso!\n");
+                    exibirDadosDoProdutoVendido(produtoVendido);
+
+                    System.out.println("Siga as intruções e digite a opção válida:");
+                    System.out.println("1 - Adicionar um novo produto a venda");
+                    System.out.println("2 - Prosseguir para finalizar a venda");
+                    System.out.println("3 - Listar o produtos selecionados até agora");
+                    System.out.println("Digite qualquer caractere alfabético para retornar ao menu");
+                    
+
+                    // Valida se a entrada foi apenas de inteiro, se sim, segue para alguma opção válida
+                    // Se não, retorna -1 e vai para o menu principal
+                    do {
+                        System.out.print("\nOpcao: ");
+                        opcao = verificarEntradaParaMenu(in.nextLine());
+                        
+                        // ADD
+                        // Adicionar Novo Produto
+                        if(opcao == 1) {
+                            verificador = true;
+                            break;
+                        }
+
+                        // VENDER
+                        // Prosseguir para finalizar a venda
+                        else if(opcao == 2) {
+                            verificador = false;
+                            realizarVenda = true;
+                            break;
+                            
+                        }
+
+                        // LISTAR
+                        // Lista os produtos adicionados até então
+                        else if(opcao == 3) {
+                            listarProdutosAtualmenteSelecionados(novaVenda.getProdutosVendidos());
+                            System.out.println("\nAperte ENTER para prosseguir");
+                            in.nextLine();
+                            verificador = true;
+                            
+                        }
+
+                        // RECARREGA
+                        // Caso a opção seja inválida
+                        else if(opcao != -1){
+                            System.out.println("Opção inválida, digite novamente!");
+                            verificador = true;
+                        }
+
+                        // RETORNA
+                        // Caso a opção tenha sido um caractere numérico para voltar ao menu
+                        else if(opcao == -1) {
+                            voltarMenu();
+                            verificador = false;
+                            break;
+                        }
+                    }while(opcao != -1);
+
+
+                } while(verificador);
+
+                // Caso a saída tenha sido feito de maneira a retornar ao menu, executa o método
+                if(quantidadeInvalida) {
                     voltarMenu();
                     continue;
                 }
 
-                // Prossegue o cadastro das vendas
-                verificador = false;
+                if(realizarVenda) {
 
-                //System.out.printf("Digite a quantidade de Venda do Produto \"%s\"", novaVenda.getProdutoVendido().getNome());
-                System.out.print("\nQuantidade: ");
-               /*  do {
-                    try { 
-                
-                        novaVenda.setQtdProdutoVendido(in.nextInt());
+                    if(novaVenda.getProdutosVendidos().size() == 0) {
+                        System.out.println("Nenhum produto foi adicionado à venda, retorne ao menu e tente novamente!");
+                        System.out.println("Digite ENTER para continuar");
                         in.nextLine();
-
-                        verificador = true;
-                        
-                    } catch(InputMismatchException ex) {
-                        System.out.println("Digite Somente Números !!");
-                        SECONDS.sleep(1);
-                        in.nextLine();
-
-                    } catch(QuantidadeNegativaOuZeroException ex) {
-                        System.out.println(ex.getMessage());
-                        System.out.print("\nQuantidade: ");
-                        in.nextLine();
+                        voltarMenu();
+                        continue;
                     }
 
-                } while(!verificador); */
+                    /*
+                        Cadastro da Data
+                        Caso seja digitado ENTER, atribui a data atual para a venda
+                        Caso seja feita um Input manual, a entrada deve obedecer o formato de data dd/MM/yyyy
+                    */
+                    System.out.printf("Digite a data de Venda do Produto (ENTER para Data Atual) no Formato: [dd/mm/yyyy]");
+                    System.out.print("\nData: ");
+                    
 
-                /*
-                    Cadastro da Data
-                    Caso seja digitado ENTER, atribui a data atual para a venda
-                    Caso seja feita um Input manual, a entrada deve obedecer o formato de data dd/MM/yyyy
-                */
-                System.out.printf("Digite a data de Venda do Produto (ENTER para Data Atual) no Formato: [dd/mm/yyyy]");
-                System.out.print("\nData: ");
-                
+                    verificador = false;
+                    do {
 
-                verificador = false;
-                /* do {
-
-                    try{
+                    
                         String dataVenda = in.nextLine();
 
                         if(dataVenda.equals("")) { // Caso seja ENTER a entrada, atribui a data atual
@@ -512,33 +1038,89 @@ public class ProgramaLoja {
                             System.out.println("\nO Formato de Data digitado nao eh valido");
                             System.out.print("\nData: ");
                             continue;
-                        }  
-
+                        } else {
+                            // Verificação para evitar que a data da venda seja uma data posterior à data atual
+                            LocalDate dataVerificacao = LocalDate.parse(dataVenda, formatter);
+                            
+                            if(dataVerificacao.isAfter(LocalDate.now())) {
+                                System.out.println("\nA data não pode ser posterior à data atual!");
+                                System.out.print("\nData: ");
+                                continue;
+                            }
+                        }
                         novaVenda.setDataVenda(LocalDate.parse(dataVenda, formatter));
                         verificador = true;
 
-                    } catch(DataInvalidaException ex) {
-                        System.out.println(ex.getMessage());
-                        System.out.print("\nData: ");
+
+                    } while(!verificador);
+    
+                    //#endregion 
+
+                    // End do Realizar Vendas
+
+                    try {
+
+
+                        /*
+                            A lista temporária de produtos guarda a informação de cada produto após sua adição a lista de vendas
+                            ao chegar aqui, o jeito como estiver o produto na lista, será o novo estoque do produto, que será 
+                            atualizado 1 a 1 para ser respectivo valor
+
+                            Caso algum produto tenha o estoque 0, não será removido para evitar q outros produtos usem
+                            o mesmo código, mas caso seja necessário adicionar + estoque ao produto, deve-se usar a função
+                            do menu de produtos para isso
+
+                            A cada vez que o ciclo rodar, o produto vendido será atualizado no estoque, se a qualquer momento
+
+                            por enquanto não vou adicionar um método de backup caso o serviço seja encerrado durante este 
+                            processo, ja que a venda não teria sido finalizada, deveria ser necessário retornar o estoque do 
+                            produto, estou ajeitando umas cosa e dps se der eu faço e realizo o commit :3, só n pare o serviço 
+                            durante esse processo de Baixa dos Produtos
+                        */
+                        novaVenda = vendaConnect.inserirNovaVenda(novaVenda);
+
+                        for (Produto produtoFinal : produtosSelecionados) {
+                            produtoConnect.atualizarProduto(produtoFinal);
+                        }
+
+                        // Realiza o calculo do total da venda
+                        Double valorTotal = novaVenda.getProdutosVendidos().stream()
+                            .mapToDouble(produto -> produto.getValor() * produto.getQuantidadeEstoque())
+                            .sum();
+
+                        novaVenda.setValorTotal(valorTotal);
+
+                        // Venda aqui
+                        System.out.println("Venda Realizada com Sucesso!");
+                    } catch(HttpClientErrorException ex) {
+                       
+                        switch(ex.getStatusCode()) {
+                            
+                            case NOT_FOUND:
+                                System.out.println("Não foi possível finalizar a venda!");
+                                System.out.println("Serviço indisponível");
+                                verificador = true;
+                                break;
+                            default:
+                                break;
+                        }
+                        voltarMenu();
+                        continue;
+
+                    } catch(HttpServerErrorException ex) {
+                        System.out.println("Serviço indisponível");
+                        voltarMenu();
+                        in.nextLine();
+                        continue;
                     }
 
-                } while(!verificador);
- */
-                // End do Realizar Vendas
+                    System.out.println("\nPressioner ENTER para continuar");
+                    in.nextLine();
+                    voltarMenu();
+                    
+                } 
 
-                /* try {
-                    //novaVenda.finalizarVenda();
 
-                    vendasRealizadas.add(novaVenda);
-                    System.out.println("Venda Realizada com Sucesso!");
-                } catch(QuantidadeNegativaOuZeroException ex) {
-                    System.out.println(ex.getMessage());
-                    System.out.println("Não foi possível finalizar a venda!");
-                } */
-
-                System.out.println("\nPressioner ENTER para continuar");
-                in.nextLine();
-                voltarMenu();
             }
             
             /*
@@ -639,7 +1221,7 @@ public class ProgramaLoja {
     /*
         -> Recebe como parâmetro um ArrayList do tipo Venda para exibir o relatório de todas as vendas realizadas
     */
-    private static void gerarRelatorioVendas(List<VendaResponse> vendasRealizadas, LocalDate dataInicial, LocalDate dataFinal) throws IOException, InterruptedException{
+    private static void gerarRelatorioVendas(List<VendaDto> vendasRealizadas, LocalDate dataInicial, LocalDate dataFinal) throws IOException, InterruptedException{
         // Primeiro exibe os cabeçalhos e uma barra para dividi-los
         cls();
         System.out.printf("Vendas no Periodo: %s - %s\n\n", 
@@ -653,7 +1235,7 @@ public class ProgramaLoja {
             é so dar um Foreach em todas as datas restantes pois estas vão ser as que atenderam as condições
             Após testes, assim é muito mais simples e quer menos linha, uma vez q depois as vendas q ficarem serão as certas
         */
-        List<VendaResponse> novoArrayParaRelatorio = new ArrayList<>();
+        List<VendaDto> novoArrayParaRelatorio = new ArrayList<>();
         novoArrayParaRelatorio.addAll(vendasRealizadas);
         novoArrayParaRelatorio.removeIf(v -> (v.getDataVenda().isAfter(dataFinal) || v.getDataVenda().isBefore(dataInicial)));
 
@@ -705,32 +1287,76 @@ public class ProgramaLoja {
         
     }
 
-
     /*
-        Função própria para evitar muita repetição de código
-        -> Recebe como parâmetro o id do produto requisitado e um ArrayList do tipo Produto para exibir os dados do produto 
-            encontrado pela busca
+        Utilizado para poupar código e poder exibir o produto encontrado quando pesquisado pelo código 
     */
-    private static Produto listarProdutoPorId(List<Produto> produtosCadastrados, int codigoProduto) throws NoSuchElementException{
-
-        return produtosCadastrados.stream()
-            .filter(p -> p.getCodigo() == codigoProduto)
-            .findFirst()
-            .get();
+    private static void exibirDadosDoProduto(Produto produto) {
+        System.out.println("\n** Produto Encontrado:\n");
+        System.out.printf("Nome: %s\n", produto.getDescricao());
+        System.out.printf("Valor: %.2f\n", produto.getValor());
+        System.out.printf("Quantidade Estoque: %d\n\n", produto.getQuantidadeEstoque());
     }
 
     /*
-        Procura se no Array já existe algum produto com o id cadastrado, se já possui, Exibe um erro e não permite cadastrar
-        o produto com um código repetido
+        Utilizado para poupar código e poder exibir o produto encontrado quando vendido
     */
-    private static boolean verificarCodigoRepetidoNoArray(List<Produto> produtosCadastrados, int codigo) {
+    private static void exibirDadosDoProdutoVendido(Produto produto) {
+        System.out.println("\n** Produto Vendido:\n");
+        System.out.printf("Nome: %s\n", produto.getDescricao());
+        System.out.printf("Valor: %.2f\n", produto.getValor());
+        System.out.printf("Quantidade Vendida: %d\n\n", produto.getQuantidadeEstoque());
+    }
 
-        for (Produto produto : produtosCadastrados) {
-            if(produto.getCodigo() == codigo) {
+    /*
+        Verifica se um produto ja foi adicionado a venda, se sim, retorna true
+    */
+    private static boolean verificarProdutoExistenteNaVenda(List<Produto> produtos, Produto produto) {
+        for (Produto verificador : produtos) {
+            // Caso possua algum produto repetido, faz a verificação do estoque
+            if(verificador.getCodigo() == produto.getCodigo()) {
                 return true;
             }
+        
         }
 
         return false;
+    } 
+
+
+    /*
+        Recebe uma lista dos produtos selecionados para exibir na tela
+        diferente do outro método, este leva em conta não o valor médio dos produtos, mas o valor total de venda
+        até então
+    */
+    private static void listarProdutosAtualmenteSelecionados(List<Produto> produtosSelecionados) {
+        // Primeiro exibe os cabeçalhos e uma barra para dividi-los
+        System.out.println("\nProdutos Selecionados: \n");
+        System.out.format(formatoDoSyouFormatTitulo, "Id", "Nome Produto", "Valor", "Qtd Vendida");
+        System.out.print(dividirTelaProdutos);
+
+        produtosSelecionados.stream()
+        .forEach(p -> {
+            
+            System.out.println();
+            System.out.format(formatoDoSysouFormatProdutos, p.getCodigo(), p.getDescricao(), p.getValor(), p.getQuantidadeEstoque() );
+        });
+
+        System.out.print(dividirTelaProdutos);
+        System.out.println();
+
+        //
+        /*
+            Pega o valor e a quantidade de todos os produtos e soma para se obter o total da venda
+            quantidade de estoque nesse caso se torna a quantidade q foi vendida
+        */
+        Double valorTotal = produtosSelecionados.stream()
+            .mapToDouble(produto -> produto.getQuantidadeEstoque() * produto.getValor())
+            .sum();
+        //
+
+        String valorTotalDaVenda = String.format("Valor Total: R$%.2f", valorTotal);
+        
+        System.out.format(formatoRodapeProdutosVendidos, valorTotalDaVenda);
+        System.out.println();
     }
 }

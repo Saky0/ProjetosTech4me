@@ -111,4 +111,18 @@ public class ProdutoController {
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
+    // Busca um produto pelo seu respectivo código, este definido no momento de seu cadastro
+    @GetMapping("/codigo/{codigo}")
+    public ResponseEntity<ProdutoResponse> obterProdutoPorCodigo(@PathVariable int codigo) {
+        // TODO Auto-generated method stub
+        Optional<ProdutoDto> optional = service.obterProdutoPorCodigo(codigo);
+
+        if(optional.isPresent()) {
+            
+            return new ResponseEntity<>(mapper.map(optional.get(), ProdutoResponse.class), HttpStatus.OK);
+        }
+
+        return new ResponseEntity<>(HttpStatus.NOT_ACCEPTABLE);
+    }
+
 }

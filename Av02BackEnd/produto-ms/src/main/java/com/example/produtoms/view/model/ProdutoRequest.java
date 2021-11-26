@@ -2,9 +2,14 @@ package com.example.produtoms.view.model;
 
 import javax.validation.constraints.DecimalMin;
 import javax.validation.constraints.Min;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotEmpty;
 
 public class ProdutoRequest {
+    @Min(value = 1, message = "O código deve ser > 0")
     private int codigo;
+    @NotBlank(message = "A descrição Não pode conter somente espaços!")
+    @NotEmpty(message = "A descrição deve ser preenchida")
     private String descricao;
 
     /*

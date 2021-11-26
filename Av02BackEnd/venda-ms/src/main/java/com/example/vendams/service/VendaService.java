@@ -19,7 +19,7 @@ public interface VendaService {
     Optional<VendaDto> obterVendaPorId(String id);
 
     // Obtem uma lista de Vendas dentro de um período delimitado
-    Optional<List<VendaDto>> obterVendaPorPeriodo(PeriodoDeVendasDto periodo);
+    List<VendaDto> obterVendaPorPeriodo(PeriodoDeVendasDto periodo);
 
     //#endregion
 

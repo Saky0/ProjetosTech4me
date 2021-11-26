@@ -17,6 +17,8 @@ public interface ProdutoService {
     // Obtem uma lista de produtos por meio de um nome em comum
     Optional<List<ProdutoDto>> obterPorNomeEmComum(String nome);
 
+    // Obtem um produto específico por meio de seu codigo
+    Optional<ProdutoDto> obterProdutoPorCodigo(int codigo);
 
     //#endregion
 

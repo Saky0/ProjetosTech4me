@@ -10,7 +10,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @EnableEurekaClient
 @EnableFeignClients
 @EnableHystrix
-public class VendaMsApplication {
+public class VendaMsApplication  {
 
 	public static void main(String[] args) {
 		SpringApplication.run(VendaMsApplication.class, args);

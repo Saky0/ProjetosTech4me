@@ -3,10 +3,12 @@ package com.example.vendams.service;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.example.vendams.clienteHTTP.ProdutoFeignClient;
 import com.example.vendams.model.Venda;
 import com.example.vendams.repository.VendaRepository;
 import com.example.vendams.shared.PeriodoDeVendasDto;
@@ -21,6 +23,9 @@ public class VendaServiceImpl implements VendaService {
 
     @Autowired
     private VendaRepository repository;
+
+    @Autowired
+    private ProdutoFeignClient pClient;
 
     private ModelMapper mapper = new ModelMapper();
 
@@ -67,7 +72,6 @@ public class VendaServiceImpl implements VendaService {
 
         if(vendaEncontradaOptional.isPresent()) {
             VendaDto dto = mapper.map(vendaEncontradaOptional.get(), VendaDto.class);
-
             return Optional.of(dto);
         }
 
@@ -77,29 +81,29 @@ public class VendaServiceImpl implements VendaService {
     // Obtem uma lista de Vendas dentro de um período delimitado
     /*
         Utiliza a Classe PeriodoDeVendasDto como uma forma de receber um @RequestBody com a dataInicial
-        e a dataFinal
+        e a dataFinal, JSON: 
+            "dataInicial": "2021-11-11",
+            "dataFinal": "2021-11-11"
     */
     @Override
-    public Optional<List<VendaDto>> obterVendaPorPeriodo(PeriodoDeVendasDto periodo) {
-        // TODO Auto-generated method stub
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("YYYY-mm-dd");
+    public List<VendaDto> obterVendaPorPeriodo(PeriodoDeVendasDto periodo) {
+        // TODO Auto-generated method stu
+        /* DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
         LocalDate dataInicial = LocalDate.parse(periodo.getDataIncial().toString(),  formatter);
-        LocalDate dataFinal = LocalDate.parse(periodo.getDataFinal().toString(),  formatter);
+        LocalDate dataFinal = LocalDate.parse(periodo.getDataFinal().toString(),  formatter); */
 
-        List<Venda> listVendas = repository.obterVendasPorPeriodo(dataInicial, dataFinal);
+        List<Venda> listVendas = repository.obterVendaPorPeriodo(periodo.getDataIncial(), periodo.getDataFinal());
 
-
-        Optional<List<Venda>> optionalVendas = Optional.of(listVendas);
-
-        if(optionalVendas.isPresent()) {
-            List<VendaDto> listDtoVendas = optionalVendas.get().stream()
+        if(!listVendas.isEmpty()) {
+            List<VendaDto> listDtoVendas = listVendas.stream()
             .map(venda -> mapper.map(venda, VendaDto.class))
             .collect(Collectors.toList());
 
-            return Optional.of(listDtoVendas);
+            return listDtoVendas;
         }
 
-        return Optional.empty();
+        return new ArrayList<VendaDto>();
+        
     }
     
 }

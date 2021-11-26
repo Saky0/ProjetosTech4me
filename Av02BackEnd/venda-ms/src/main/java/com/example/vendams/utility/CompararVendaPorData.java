@@ -2,12 +2,12 @@ package com.example.vendams.utility;
 
 import java.util.Comparator;
 
-import com.example.vendams.view.model.VendaResponse;
+import com.example.vendams.shared.VendaDto;
 
-public class CompararVendaPorData implements Comparator<VendaResponse>{
+public class CompararVendaPorData implements Comparator<VendaDto>{
 
     @Override
-    public int compare(VendaResponse v1, VendaResponse v2) {
+    public int compare(VendaDto v1, VendaDto v2) {
         int difHora = v1.getDataVenda().getYear() - v2.getDataVenda().getYear();
 
         if(difHora != 0) {
